@@ -1,8 +1,9 @@
 // まいにち家計簿：オフラインで動かすためのキャッシュ。アプリを更新したら VERSION を上げる
-const VERSION = 'v1.0.0';
+const VERSION = 'v1.0.1';
 const CACHE = 'mainichi-kakeibo-' + VERSION;
 const CORE = ['./', './index.html', './guide.html', './manifest.webmanifest',
-  './icons/favicon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './icons/maskable-512.png'];
+  './icons/favicon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './icons/maskable-512.png',
+  './guide/setup.jpg', './guide/cal.jpg', './guide/sheet.jpg', './guide/accts.jpg', './guide/budget.jpg', './guide/cats.jpg'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)));
