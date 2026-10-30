@@ -325,10 +325,18 @@ const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const toHalf=s=>String(s||'').replace(/[０-９]/g,d=>String.fromCharCode(d.charCodeAt(0)-0xFEE0)).replace(/[－ー−]/g,'-');
 const money=v=>{const r=toHalf(v).replace(/[^\d-]/g,'');if(!r||r==='-')return null;const n=Number(r);return isNaN(n)?null:n};
 const fmtMoney=n=>n==null||n===''?'':Number(n).toLocaleString('ja-JP');
-function bindMoney(root){root.querySelectorAll('input[data-money]').forEach(inp=>inp.addEventListener('input',()=>{
-  const neg=inp.dataset.money==='neg'&&/^[-－ー−]/.test(inp.value.trim());const r=toHalf(inp.value).replace(/[^\d]/g,'').slice(0,10);
-  inp.value=(neg?'-':'')+(r?Number(r).toLocaleString('ja-JP'):'')}))}
-const moneyInput=(id,val,neg,ph)=>'<input type="text" inputmode="'+(neg?'text':'numeric')+'" autocomplete="off" data-money="'+(neg?'neg':'1')+'" id="'+id+'" value="'+esc(fmtMoney(val))+'" placeholder="'+(ph||'0')+'">';
+// 金額の欄：入力に合わせてカンマを入れる。日本語入力で変換中（下線が付いている間）は書き換えない（書き換えると数字が二重に入るため）
+function bindMoney(root){root.querySelectorAll('input[data-money]').forEach(inp=>{
+  if(inp.dataset.mb)return;inp.dataset.mb='1';
+  const fmt=()=>{const neg=inp.dataset.money==='neg'&&/^[-－ー−]/.test(inp.value.trim());const r=toHalf(inp.value).replace(/[^\d]/g,'').slice(0,10);
+    const v=(neg?'-':'')+(r?Number(r).toLocaleString('ja-JP'):'');if(inp.value!==v)inp.value=v};
+  let comp=false;
+  inp.addEventListener('compositionstart',()=>{comp=true});
+  inp.addEventListener('compositionend',()=>{comp=false;setTimeout(fmt,0)});
+  inp.addEventListener('input',e=>{if(comp||e.isComposing)return;fmt()});
+  inp.addEventListener('blur',fmt);
+})}
+const moneyInput=(id,val,neg,ph)=>'<input type="text" inputmode="numeric" autocomplete="off" data-money="'+(neg?'neg':'1')+'" id="'+id+'" value="'+esc(fmtMoney(val))+'" placeholder="'+(ph||'0')+'">';
 
 /* ========== Japanese bank holidays ========== */
 const holCache={};
@@ -351,7 +359,7 @@ function bankClosed(d){const w=d.getDay(),m=d.getMonth()+1,day=d.getDate();retur
 
 /* ========== data ========== */
 const KEY='mainichi-kakeibo:v2';
-const APP_VERSION='1.3.0';
+const APP_VERSION='1.3.1';
 const SUPPORT_URL='';// 販売ページやお問い合わせ先のURLを入れると、設定に「お問い合わせ」ボタンが出ます
 const KINDS={bank:'銀行口座',cash:'財布（現金）',emoney:'電子マネー・アプリ',savings:'貯金用の口座'};
 const KIND_SHORT={bank:'口座',cash:'現金',emoney:'電子マネー',savings:'貯金'};
@@ -1071,7 +1079,7 @@ function drawSetup(){
       '<section class="card pad" id="suAccs">'+SU.accounts.map((a,i)=>'<div class="srow" data-i="'+i+'"><div class="hd"><span class="label">'+(i+1)+'つ目</span>'+(SU.accounts.length>1?'<button type="button" class="rm" data-rm="'+i+'">削除</button>':'')+'</div>'+
         '<div class="two"><div class="field"><label>種類</label><select class="ak">'+Object.entries(KINDS).map(([k,n])=>'<option value="'+k+'"'+(a.kind===k?' selected':'')+'>'+n+'</option>').join('')+'</select></div>'+
         '<div class="field"><label>名前</label><input type="text" class="an" maxlength="20" placeholder="'+({bank:'例：〇〇銀行',cash:'例：財布',emoney:'例：PayPay',savings:'例：〇〇銀行（貯金）'})[a.kind]+'" value="'+esc(a.name)+'"></div></div>'+
-        '<div class="field"><label>今の残高（空欄でもOK）</label><input type="text" class="ab" inputmode="text" data-money="neg" value="'+esc(fmtMoney(a.bal))+'" placeholder="例：120,000"></div></div>').join('')+'</section>'+
+        '<div class="field"><label>今の残高（空欄でもOK）</label><input type="text" class="ab" inputmode="numeric" data-money="neg" value="'+esc(fmtMoney(a.bal))+'" placeholder="例：120,000"></div></div>').join('')+'</section>'+
       '<button class="btn line" type="button" id="suAddA">＋ 口座・財布・電子マネーを追加</button>';
   }else if(s===2){
     const banks=SU.accounts.filter(a=>a.kind!=='cash');
