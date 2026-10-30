@@ -344,7 +344,7 @@ function bankClosed(d){const w=d.getDay(),m=d.getMonth()+1,day=d.getDate();retur
 
 /* ========== data ========== */
 const KEY='mainichi-kakeibo:v2';
-const APP_VERSION='1.0.0';
+const APP_VERSION='1.0.2';
 const SUPPORT_URL='';// 販売ページやお問い合わせ先のURLを入れると、設定に「お問い合わせ」ボタンが出ます
 const KINDS={bank:'銀行口座',cash:'財布（現金）',emoney:'電子マネー・アプリ',savings:'貯金用の口座'};
 const KIND_SHORT={bank:'口座',cash:'現金',emoney:'電子マネー',savings:'貯金'};
@@ -527,6 +527,8 @@ function entryRow(e,showDate){
   b.onclick=()=>openEntry(e);return b;
 }
 
+// カレンダーのダブルタップ判定（描き直しても消えないようにここで覚える）
+const TAP={ds:'',t:0};
 function renderCal(v){
   const ym=state.ym,list=monthOf(ym);v.append(sum3(list));
   const ws=D.prefs.weekStart||0,[pa,pb]=period(ym),first=parse(pa),start=new Date(first);start.setDate(first.getDate()-((first.getDay()-ws+7)%7));
@@ -538,7 +540,7 @@ function renderCal(v){
   for(let i=0;i<weeks*7;i++){const d=new Date(start);d.setDate(start.getDate()+i);const ds=ymd(d),x=byDay[ds];
     const b=el('button','cell'+(ds<pa||ds>pb?' other':'')+(ds===state.sel?' sel':'')+(ds===todayStr?' today':'')+(d.getDay()===0||isHoliday(d)?' sun':d.getDay()===6?' sat':''));
     b.type='button';b.innerHTML='<span class="d">'+d.getDate()+'</span>'+(x&&x.o?'<span class="o num">'+x.o.toLocaleString()+'</span>':'')+(x&&x.i?'<span class="i num">+'+x.i.toLocaleString()+'</span>':'')+(wd[ds]?'<span class="w">引落</span>':'');
-    let lastTap=0;b.onclick=()=>{const t=Date.now();if(state.sel===ds&&t-lastTap<400){openEntry(null,ds);return}lastTap=t;state.sel=ds;if(periodYm(ds)!==state.ym)state.ym=periodYm(ds);render()};
+    b.onclick=()=>{const t=Date.now();if(TAP.ds===ds&&t-TAP.t<450){TAP.t=0;openEntry(null,ds);return}TAP.ds=ds;TAP.t=t;state.sel=ds;if(periodYm(ds)!==state.ym)state.ym=periodYm(ds);render()};
     c.append(b)}
   v.append(c);
   const dc=el('section','card');const items=calc().all.filter(e=>e.date===state.sel).sort((a,b)=>(b.ts||0)-(a.ts||0));
