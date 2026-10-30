@@ -233,6 +233,21 @@ select{-webkit-appearance:none;appearance:none;padding-right:28px;background-ima
 .foot{font-size:.74rem;color:var(--muted);text-align:center;margin:4px 0 0}
 @media (max-width:370px){.cell{min-height:56px;font-size:.6rem}.three{grid-template-columns:1fr 1fr}.three>:first-child{grid-column:1/-1}}
 button,a,.cell{touch-action:manipulation}
+.calc{position:fixed;left:0;right:0;bottom:0;z-index:70;background:var(--sheet);border-top:1px solid var(--rule);box-shadow:0 -8px 24px rgba(0,0,0,.14);
+  padding:8px max(10px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(10px,env(safe-area-inset-left,0px))}
+.calc .ctop{max-width:520px;margin:0 auto 6px;display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:.8rem;color:var(--muted);padding:2px 4px;min-height:1.6em}
+.calc .ctop b{margin-left:auto;color:var(--acc);font-size:1.15rem}
+.ckeys{max-width:520px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.ckeys button{height:52px;border:0;border-radius:12px;background:var(--paper);font-size:1.35rem;font-family:var(--f-num);font-weight:700;color:var(--ink);-webkit-user-select:none;user-select:none}
+.ckeys button:active{filter:brightness(.92)}
+.ckeys .op{background:var(--acc-soft);color:var(--acc);font-size:1.5rem}
+.ckeys .fn{color:var(--muted);font-size:1.1rem}
+.ckeys .ok{grid-column:span 2;background:var(--acc);color:#fff;font-size:1.05rem;font-family:var(--f-body)}
+body.calc-open .sheet{padding-bottom:calc(360px + env(safe-area-inset-bottom,0px))}
+body.calc-open .setup{padding-bottom:380px}
+body.calc-open{padding-bottom:calc(400px + env(safe-area-inset-bottom,0px))}
+body.calc-open .fab,body.calc-open .toast{display:none}
+@media (max-height:500px) and (orientation:landscape){.ckeys button{height:36px;font-size:1.1rem}.ckeys{max-width:620px}body.calc-open .sheet{padding-bottom:260px}}
 #view,#strip,#monthbar{width:100%}
 .soon{display:inline-block;vertical-align:middle;margin-left:6px;font-size:.7rem;font-family:var(--f-body);background:var(--acc-soft);color:var(--acc);border-radius:999px;padding:2px 10px;letter-spacing:.05em}
 .btn:disabled{opacity:.45;cursor:default}
@@ -323,19 +338,58 @@ const addMonths=(ym,n)=>{const [y,m]=ym.split('-').map(Number);const d=new Date(
 const ymj=ym=>Number(ym.slice(0,4))+'年'+Number(ym.slice(5))+'月';
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const toHalf=s=>String(s||'').replace(/[０-９]/g,d=>String.fromCharCode(d.charCodeAt(0)-0xFEE0)).replace(/[－ー−]/g,'-');
-const money=v=>{const r=toHalf(v).replace(/[^\d-]/g,'');if(!r||r==='-')return null;const n=Number(r);return isNaN(n)?null:n};
+// 電卓：「1,280+350」「3000×2」のような式を計算する（掛け算・割り算が先。答えは円単位に四捨五入）
+const normExpr=s=>toHalf(String(s==null?'':s)).replace(/＋/g,'+').replace(/[－ー−]/g,'-').replace(/[×xX＊]/g,'*').replace(/[÷／]/g,'/').replace(/[,，\s¥円]/g,'');
+const hasOp=s=>/\d[-+*/]/.test(normExpr(s));
+function evalExpr(s){const t=normExpr(s).replace(/[-+*/]+$/,'');if(!t||!/^[-+*/\d.]+$/.test(t))return null;
+  const k=t.match(/\d+(?:\.\d+)?|[-+*/]/g);let i=0;
+  const num=()=>{let sg=1;while(k[i]==='-'||k[i]==='+'){if(k[i]==='-')sg=-sg;i++}const v=parseFloat(k[i++]);return sg*v};
+  const term=()=>{let v=num();while(k[i]==='*'||k[i]==='/'){const o=k[i++],r=num();v=o==='*'?v*r:(r===0?NaN:v/r)}return v};
+  let v=term();while(k[i]==='+'||k[i]==='-'){const o=k[i++],r=term();v=o==='+'?v+r:v-r}
+  if(i<k.length||!isFinite(v))return null;return Math.round(v)}
+const fmtExpr=s=>normExpr(s).replace(/\d+(?:\.\d+)?/g,d=>d.includes('.')?d:Number(d).toLocaleString('ja-JP')).replace(/\*/g,'×').replace(/\//g,'÷').replace(/(\d)-/g,'$1−');
+const money=v=>{if(hasOp(v))return evalExpr(v);const r=toHalf(v).replace(/[^\d-]/g,'');if(!r||r==='-')return null;const n=Number(r);return isNaN(n)?null:n};
 const fmtMoney=n=>n==null||n===''?'':Number(n).toLocaleString('ja-JP');
 // 金額の欄：入力に合わせてカンマを入れる。日本語入力で変換中（下線が付いている間）は書き換えない（書き換えると数字が二重に入るため）
 function bindMoney(root){root.querySelectorAll('input[data-money]').forEach(inp=>{
+  inp.inputMode=useCalc()?'none':(isTouch?'numeric':'text');
   if(inp.dataset.mb)return;inp.dataset.mb='1';
-  const fmt=()=>{const neg=inp.dataset.money==='neg'&&/^[-－ー−]/.test(inp.value.trim());const r=toHalf(inp.value).replace(/[^\d]/g,'').slice(0,10);
+  const fmt=(final)=>{if(hasOp(inp.value)){if(final){const r=evalExpr(inp.value);inp.value=r==null?'':((r<0&&inp.dataset.money==='neg')?'-':'')+Math.abs(r).toLocaleString('ja-JP')}return}const neg=inp.dataset.money==='neg'&&/^[-－ー−]/.test(inp.value.trim());const r=toHalf(inp.value).replace(/[^\d]/g,'').slice(0,10);
     const v=(neg?'-':'')+(r?Number(r).toLocaleString('ja-JP'):'');if(inp.value!==v)inp.value=v};
   let comp=false;
   inp.addEventListener('compositionstart',()=>{comp=true});
   inp.addEventListener('compositionend',()=>{comp=false;setTimeout(fmt,0)});
   inp.addEventListener('input',e=>{if(comp||e.isComposing)return;fmt()});
-  inp.addEventListener('blur',fmt);
+  inp.addEventListener('blur',()=>{if(!(CALC&&CALC.inp===inp))fmt(true)});
 })}
+const useCalc=()=>{try{return !!(isTouch&&D&&D.prefs&&D.prefs.calc!==false)}catch(e){return false}};
+let CALC=null;
+const CALC_KEYS=[['C','c','fn'],['÷','/','op'],['×','*','op'],['⌫','b','fn'],['7'],['8'],['9'],['−','-','op'],['4'],['5'],['6'],['+','+','op'],['1'],['2'],['3'],['=','=','op'],['0'],['00'],['完了','ok','ok']];
+function calcPanel(){let c=$('calc');if(c)return c;c=document.createElement('div');c.id='calc';c.className='calc';c.hidden=true;c.setAttribute('role','group');c.setAttribute('aria-label','電卓');
+  c.innerHTML='<div class="ctop"><span id="cHint">電卓のように計算できます</span><b id="cRes" class="num"></b></div><div class="ckeys">'+CALC_KEYS.map(([l,k,cl])=>'<button type="button" data-k="'+(k||l)+'" class="'+(cl||'')+'">'+l+'</button>').join('')+'</div>';
+  document.body.append(c);
+  c.addEventListener('pointerdown',e=>e.preventDefault());c.addEventListener('mousedown',e=>e.preventDefault());
+  c.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>calcKey(b.dataset.k)));return c}
+function calcShow(){if(!CALC)return;const inp=CALC.inp;inp.value=fmtExpr(CALC.raw);inp.dispatchEvent(new Event('input',{bubbles:true}));
+  const r=hasOp(CALC.raw)?evalExpr(CALC.raw):null;$('cRes').textContent=r==null?'':'= '+yen(r);$('cHint').hidden=r!=null}
+function openCalc(inp){if(CALC&&CALC.inp===inp)return;if(CALC)closeCalc();const c=calcPanel();
+  CALC={inp,raw:normExpr(inp.value)};c.hidden=false;document.body.classList.add('calc-open');calcShow();
+  setTimeout(()=>{try{inp.scrollIntoView({block:'center',behavior:'smooth'})}catch(e){}},60)}
+function closeCalc(){if(!CALC)return;const {inp,raw}=CALC;CALC=null;const c=$('calc');if(c)c.hidden=true;document.body.classList.remove('calc-open');
+  if(inp&&inp.isConnected){if(hasOp(raw)){const r=evalExpr(raw);inp.value=r==null?'':fmtMoney(r)}inp.dispatchEvent(new Event('input',{bubbles:true}));inp.blur()}}
+function calcKey(k){if(!CALC)return;let r=CALC.raw;const last=r.slice(-1),isOp=x=>'+-*/'.includes(x);
+  if(/^\d+$/.test(k)){const cur=(r.match(/[\d.]*$/)||[''])[0];if(cur.length+k.length>10)return;if(cur==='0')r=r.slice(0,-1);r+=k}
+  else if(isOp(k)){if(!r){if(k==='-'&&CALC.inp.dataset.money==='neg')r='-';else return}else if(isOp(last))r=r.slice(0,-1)+k;else r+=k}
+  else if(k==='b')r=r.slice(0,-1);
+  else if(k==='c')r='';
+  else if(k==='='||k==='ok'){if(hasOp(r)){const v=evalExpr(r);if(v==null){toast('計算できない式です');return}r=String(v)}if(k==='ok'){CALC.raw=r;calcShow();closeCalc();return}}
+  CALC.raw=r;calcShow()}
+document.addEventListener('focusin',e=>{const t=e.target;if(t&&t.matches&&t.matches('input[data-money]')&&useCalc())openCalc(t)});
+// 電卓の外を押したとき：金額はすぐ確定し、電卓を閉じるのは指を離したあと（押した瞬間に画面がずれてボタンが押せなくなるのを防ぐ）
+document.addEventListener('pointerdown',e=>{if(!CALC)return;const t=e.target;if(t.closest&&(t.closest('#calc')||t.closest('input[data-money]')))return;
+  const c=CALC;if(hasOp(c.raw)){const r=evalExpr(c.raw);c.raw=r==null?'':String(r);c.inp.value=r==null?'':fmtMoney(r);c.inp.dispatchEvent(new Event('input',{bubbles:true}))}
+  let done=false;const fin=()=>{if(done)return;done=true;if(CALC===c)closeCalc()};
+  document.addEventListener('pointerup',()=>setTimeout(fin,0),{once:true,capture:true});setTimeout(fin,800)},true);
 const moneyInput=(id,val,neg,ph)=>'<input type="text" inputmode="numeric" autocomplete="off" data-money="'+(neg?'neg':'1')+'" id="'+id+'" value="'+esc(fmtMoney(val))+'" placeholder="'+(ph||'0')+'">';
 
 /* ========== Japanese bank holidays ========== */
@@ -359,13 +413,13 @@ function bankClosed(d){const w=d.getDay(),m=d.getMonth()+1,day=d.getDate();retur
 
 /* ========== data ========== */
 const KEY='mainichi-kakeibo:v2';
-const APP_VERSION='1.3.1';
+const APP_VERSION='1.4.0';
 const SUPPORT_URL='';// 販売ページやお問い合わせ先のURLを入れると、設定に「お問い合わせ」ボタンが出ます
 const KINDS={bank:'銀行口座',cash:'財布（現金）',emoney:'電子マネー・アプリ',savings:'貯金用の口座'};
 const KIND_SHORT={bank:'口座',cash:'現金',emoney:'電子マネー',savings:'貯金'};
 const DEF_OUTSIDE={name:'予算外',subs:['特別な出費','税金','カードの支払い','立て替え','雑費']};
 const OUT=()=>D.cats.outside.name;
-const DEF_PREFS={theme:'auto',accent:'green',weekStart:0,monthStart:1,startTab:'last',tabs:{budget:true,stats:true},defType:'out',defSrc:'',defDst:'',horizon:62,warnBelow:0,totalSavings:true,cashWarn:false,bg:'default',bgColor:'#f4a6c0',bgStrength:1};
+const DEF_PREFS={theme:'auto',accent:'green',weekStart:0,monthStart:1,startTab:'last',tabs:{budget:true,stats:true},defType:'out',defSrc:'',defDst:'',horizon:62,warnBelow:0,totalSavings:true,cashWarn:false,calc:true,bg:'default',bgColor:'#f4a6c0',bgStrength:1};
 const DEF_OUT=[
   {name:'住居費',subs:['家賃','管理費','更新料'],budget:0},
   {name:'食費',subs:['食材','外食','カフェ・おやつ'],budget:0},
@@ -496,7 +550,7 @@ function applyLook(){const r=document.documentElement,p=D.prefs;
   if(p.accent==='green')r.removeAttribute('data-acc');else r.setAttribute('data-acc',p.accent);
   document.querySelectorAll('.tabs button').forEach(b=>{const k=b.dataset.v;b.hidden=(k==='budget'||k==='stats')&&!p.tabs[k]});
   const m=document.querySelector('meta[name=theme-color]');if(m)m.content=getComputedStyle(r).getPropertyValue('--paper').trim()||'#f2f5f4';}
-function render(){
+function render(){if(CALC&&!(CALC.inp&&CALC.inp.isConnected))closeCalc();
   applyLook();
   if(['budget','stats'].includes(state.view)&&!D.prefs.tabs[state.view])state.view='cal';
   $('appName').textContent=D.name||'家計簿';
@@ -681,7 +735,7 @@ function renderAccts(v){
 let lockY=null;
 function lockScroll(){if(lockY!==null)return;lockY=scrollY;const b=document.body.style;b.position='fixed';b.top=(-lockY)+'px';b.left='0';b.right='0'}
 function unlockScroll(){if(lockY===null)return;const b=document.body.style;b.position='';b.top='';b.left='';b.right='';const y=lockY;lockY=null;scrollTo(0,y)}
-function showSheet(html){const s=$('sheet');s.innerHTML='<form novalidate><div class="grip"></div>'+html+'</form>';s.hidden=false;$('scrim').hidden=false;s.scrollTop=0;lockScroll();bindMoney(s);
+function showSheet(html){closeCalc();const s=$('sheet');s.innerHTML='<form novalidate><div class="grip"></div>'+html+'</form>';s.hidden=false;$('scrim').hidden=false;s.scrollTop=0;lockScroll();bindMoney(s);
   const f=s.querySelector('form');
   // フォームの送信は使わない（プレビュー画面などでは送信が禁止されているため）。保存ボタンとEnterキーで直接保存する
   f.addEventListener('submit',e=>e.preventDefault());
@@ -689,7 +743,7 @@ function showSheet(html){const s=$('sheet');s.innerHTML='<form novalidate><div c
   s.querySelectorAll('button[type=submit]').forEach(b=>{b.type='button';b.addEventListener('click',run)});
   f.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches('input[type=text],input:not([type])')&&!e.isComposing){e.preventDefault();run()}});
   return s}
-function closeSheet(){$('sheet').hidden=true;$('scrim').hidden=true;$('sheet').innerHTML='';unlockScroll()}
+function closeSheet(){closeCalc();$('sheet').hidden=true;$('scrim').hidden=true;$('sheet').innerHTML='';unlockScroll()}
 $('scrim').onclick=closeSheet;
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('sheet').hidden)closeSheet()});
 
@@ -901,9 +955,10 @@ function renderSettings(v){
   const rs=el('section','card pad','<h2>記録するときの初期値</h2>'+
     '<div class="field"><label for="pType">はじめに選ばれている種類</label><select id="pType">'+selOpts([['out','支出'],['in','収入'],['move','振替・チャージ'],['last','前回と同じ']],P.defType)+'</select></div>'+
     '<div class="two"><div class="field"><label for="pSrc">支払い元</label><select id="pSrc">'+selOpts(srcs,P.defSrc)+'</select></div>'+
-    '<div class="field"><label for="pDst">入金先</label><select id="pDst">'+selOpts(dsts,P.defDst)+'</select></div></div>');
+    '<div class="field"><label for="pDst">入金先</label><select id="pDst">'+selOpts(dsts,P.defDst)+'</select></div></div>'+
+    '<label class="toggle"><span>金額を電卓で入力する<br><small class="note">スマホ・タブレットで金額の欄を押すと、電卓が出ます（1,280＋350 のように計算できます）。オフにすると数字のキーボードになります。パソコンはキーボードで式を打てます。</small></span><input type="checkbox" id="pCalc"'+(P.calc!==false?' checked':'')+'></label>');
   v.append(rs);
-  $('pType').onchange=e=>setP('defType',e.target.value);$('pSrc').onchange=e=>setP('defSrc',e.target.value);$('pDst').onchange=e=>setP('defDst',e.target.value);
+  $('pCalc').onchange=e=>setP('calc',e.target.checked);$('pType').onchange=e=>setP('defType',e.target.value);$('pSrc').onchange=e=>setP('defSrc',e.target.value);$('pDst').onchange=e=>setP('defDst',e.target.value);
 
   /* お知らせ */
   const ws=el('section','card pad','<h2>残高の見込みとお知らせ</h2>'+
