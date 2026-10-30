@@ -232,6 +232,9 @@ select{-webkit-appearance:none;appearance:none;padding-right:28px;background-ima
 .foot{font-size:.74rem;color:var(--muted);text-align:center;margin:4px 0 0}
 @media (max-width:370px){.cell{min-height:56px;font-size:.6rem}.three{grid-template-columns:1fr 1fr}.three>:first-child{grid-column:1/-1}}
 button,a,.cell{touch-action:manipulation}
+.soon{display:inline-block;vertical-align:middle;margin-left:6px;font-size:.7rem;font-family:var(--f-body);background:var(--acc-soft);color:var(--acc);border-radius:999px;padding:2px 10px;letter-spacing:.05em}
+.btn:disabled{opacity:.45;cursor:default}
+.toggle small{font-size:.76rem}
 .banner{max-width:620px;margin:0 auto 12px;display:flex;gap:10px;align-items:flex-start;background:var(--acc-soft);border-radius:12px;padding:10px 12px;font-size:.84rem;line-height:1.55}
 .banner .x{margin-left:auto;border:0;background:none;color:var(--muted);font-size:1.1rem;line-height:1;padding:2px 4px}
 .banner .b{flex:0 0 auto;border:0;background:var(--acc);color:#fff;border-radius:8px;padding:6px 10px;font-weight:700;font-size:.8rem}
@@ -347,7 +350,7 @@ function bankClosed(d){const w=d.getDay(),m=d.getMonth()+1,day=d.getDate();retur
 
 /* ========== data ========== */
 const KEY='mainichi-kakeibo:v2';
-const APP_VERSION='1.1.0';
+const APP_VERSION='1.1.1';
 const SUPPORT_URL='';// 販売ページやお問い合わせ先のURLを入れると、設定に「お問い合わせ」ボタンが出ます
 const KINDS={bank:'銀行口座',cash:'財布（現金）',emoney:'電子マネー・アプリ',savings:'貯金用の口座'};
 const KIND_SHORT={bank:'口座',cash:'現金',emoney:'電子マネー',savings:'貯金'};
@@ -798,6 +801,7 @@ function renderSettings(v){
   /* 基本 */
   v.append(el('section','card pad','<h2>家計簿の名前</h2><div class="btnrow" style="flex-wrap:nowrap"><input type="text" id="sName" maxlength="20" aria-label="家計簿の名前" value="'+esc(D.name)+'"><button class="btn sm" id="sNameSave" type="button">保存</button></div>'));
   $('sNameSave').onclick=()=>{D.name=$('sName').value.trim()||'わが家の家計簿';commit('保存しました')};
+  v.append(el('section','card pad','<h2>家族と共有 <span class="soon">近日公開</span></h2><div class="note">同じ家計簿を、家族のスマホでも見て記録できる機能を準備しています。公開されたら、ここからはじめられるようになります。</div><div><button class="btn sm" type="button" disabled>準備中</button></div>'));
 
   /* 口座 */
   const ac=el('section','card');ac.append(el('div','sec-h','<h2>口座・財布・電子マネー</h2><button class="link" type="button" id="sAddA">＋ 追加</button>'));
@@ -889,11 +893,12 @@ function renderSettings(v){
 
   /* お知らせ */
   const ws=el('section','card pad','<h2>残高の見込みとお知らせ</h2>'+
-    '<div class="two"><div class="field"><label for="pHor">先まで計算する期間</label><select id="pHor">'+selOpts([[31,'1か月'],[62,'2か月'],[93,'3か月'],[186,'6か月']],P.horizon)+'</select></div>'+
-    '<div class="field"><label for="pWarn">この金額を下回ったら知らせる</label>'+moneyInput('pWarn',P.warnBelow||'',false,'0（マイナスで知らせる）')+'</div></div>'+
-    '<label class="toggle">財布（現金）もお知らせの対象にする<input type="checkbox" id="pCash"'+(P.cashWarn?' checked':'')+'></label>'+
-    '<label class="toggle">「今日のお金の合計」に貯金用の口座をふくめる<input type="checkbox" id="pSav"'+(P.totalSavings?' checked':'')+'></label>'+
-    '<div><button class="btn sm" type="button" id="pWarnSave">金額を保存</button></div>');
+    '<div class="note">登録したカード払いと毎月の入出金（給料・家賃など）から、口座の残高がこの先いくらになるかを計算します。足りなくなりそうな日があると、画面の上に「⚠」でお知らせします。見込みは「口座・カード」タブの「これからの動き」で見られます。</div>'+
+    '<div class="field"><label for="pHor">どこまで先を計算するか</label><select id="pHor">'+selOpts([[31,'1か月先まで'],[62,'2か月先まで'],[93,'3か月先まで'],[186,'6か月先まで']],P.horizon)+'</select></div>'+
+    '<div class="field"><label for="pWarn">お知らせする残高のライン</label><div class="btnrow" style="flex-wrap:nowrap;align-items:center"><span style="font-weight:700">¥</span>'+moneyInput('pWarn',P.warnBelow||'',false,'0')+'<button class="btn sm" type="button" id="pWarnSave">保存</button></div>'+
+      '<div class="note">0 のままなら、残高が<b>マイナス（足りない）</b>になりそうなときだけ知らせます。例えば 30,000 にすると、残高が3万円を下回りそうなときに知らせます。</div></div>'+
+    '<label class="toggle"><span>財布（現金）もお知らせする<br><small class="note">オフにすると、財布はお知らせしません</small></span><input type="checkbox" id="pCash"'+(P.cashWarn?' checked':'')+'></label>'+
+    '<label class="toggle"><span>「今日のお金の合計」に貯金用の口座を入れる<br><small class="note">オフにすると、使えるお金だけの合計になります</small></span><input type="checkbox" id="pSav"'+(P.totalSavings?' checked':'')+'></label>');
   v.append(ws);bindMoney(ws);
   $('pHor').onchange=e=>setP('horizon',Number(e.target.value));
   $('pWarnSave').onclick=()=>{P.warnBelow=money($('pWarn').value)||0;commit('保存しました')};

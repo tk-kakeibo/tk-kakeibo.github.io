@@ -1,5 +1,5 @@
 // まいにち家計簿：オフラインで動かすためのキャッシュ。アプリを更新したら VERSION を上げる
-const VERSION = 'v1.1.0';
+const VERSION = 'v1.1.1';
 const CACHE = 'mainichi-kakeibo-' + VERSION;
 const CORE = ['./', './index.html', './guide.html', './manifest.webmanifest',
   './icons/favicon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './icons/maskable-512.png',
