@@ -194,6 +194,9 @@ select{-webkit-appearance:none;appearance:none;padding-right:28px;background-ima
 .toggle{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:.92rem}
 .toggle input{width:22px;height:22px;accent-color:var(--acc)}
 .sw{display:flex;gap:8px;flex-wrap:wrap}.sw button{width:36px;height:36px;border-radius:50%;border:3px solid transparent}.sw button[aria-pressed=true]{border-color:var(--ink)}
+.sw.bg button{box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+.sw .pick{position:relative;overflow:hidden;background:conic-gradient(#f66,#fc6,#6c6,#6cf,#96f,#f6c,#f66)}
+.sw .pick input{position:absolute;inset:0;opacity:0;width:100%;height:100%;border:0;padding:0;cursor:pointer}
 .catrow .subs{grid-column:1/-1}
 .catrow.in{grid-template-columns:minmax(0,1fr) auto auto auto}
 .catrow .rm{border:1px solid var(--rule);background:none;border-radius:8px;padding:0 10px;height:44px;color:var(--red);font-size:.8rem}
@@ -344,13 +347,13 @@ function bankClosed(d){const w=d.getDay(),m=d.getMonth()+1,day=d.getDate();retur
 
 /* ========== data ========== */
 const KEY='mainichi-kakeibo:v2';
-const APP_VERSION='1.0.2';
+const APP_VERSION='1.1.0';
 const SUPPORT_URL='';// 販売ページやお問い合わせ先のURLを入れると、設定に「お問い合わせ」ボタンが出ます
 const KINDS={bank:'銀行口座',cash:'財布（現金）',emoney:'電子マネー・アプリ',savings:'貯金用の口座'};
 const KIND_SHORT={bank:'口座',cash:'現金',emoney:'電子マネー',savings:'貯金'};
 const DEF_OUTSIDE={name:'予算外',subs:['特別な出費','税金','カードの支払い','立て替え','雑費']};
 const OUT=()=>D.cats.outside.name;
-const DEF_PREFS={theme:'auto',accent:'green',weekStart:0,monthStart:1,startTab:'last',tabs:{budget:true,stats:true},defType:'out',defSrc:'',defDst:'',horizon:62,warnBelow:0,totalSavings:true,cashWarn:false};
+const DEF_PREFS={theme:'auto',accent:'green',weekStart:0,monthStart:1,startTab:'last',tabs:{budget:true,stats:true},defType:'out',defSrc:'',defDst:'',horizon:62,warnBelow:0,totalSavings:true,cashWarn:false,bg:'default',bgColor:'#f4a6c0',bgStrength:1};
 const DEF_OUT=[
   {name:'住居費',subs:['家賃','管理費','更新料'],budget:0},
   {name:'食費',subs:['食材','外食','カフェ・おやつ'],budget:0},
@@ -463,7 +466,20 @@ if(['budget','stats'].includes(state.view)&&!D.prefs.tabs[state.view])state.view
 const saveView=()=>{try{localStorage.setItem(KEY+':view',state.view)}catch(e){}};
 
 /* ========== render ========== */
+// 背景の色：[ライト, ダーク]
+const BG={default:['#f2f5f4','#12191c','おまかせ'],white:['#ffffff','#0f1214','ホワイト'],cream:['#f7f2e8','#1b1914','クリーム'],pink:['#fbeef3','#1f151a','ピンク'],
+  blue:['#ecf2fa','#121821','ブルー'],lavender:['#f1eefa','#18151f','ラベンダー'],mint:['#e7f5ee','#111d17','ミント'],gray:['#e9ebec','#161718','グレー']};
+const hexRgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+const rgbHex=a=>'#'+a.map(v=>Math.round(Math.max(0,Math.min(255,v))).toString(16).padStart(2,'0')).join('');
+const mixHex=(a,b,t)=>{const x=hexRgb(a),y=hexRgb(b);return rgbHex(x.map((v,i)=>v+(y[i]-v)*t))};
+const lum=h=>{const c=hexRgb(h).map(v=>{v/=255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)});return .2126*c[0]+.7152*c[1]+.0722*c[2]};
+const darkNow=()=>{const t=D.prefs.theme;return t==='dark'||(t==='auto'&&!!(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches))};
+// 自由に選んだ色は、文字が読みやすい明るさに整えて使う
+function customBg(c,strength){let t=[.85,.7,.5][strength]!=null?[.85,.7,.5][strength]:.7,l=mixHex(c,'#ffffff',t);while(lum(l)<.55&&t<.97){t+=.05;l=mixHex(c,'#ffffff',t)}return [l,mixHex(c,'#101418',.84)]}
+function paperColor(){const p=D.prefs;let pair=BG[p.bg]||null;if(p.bg==='custom'&&/^#[0-9a-f]{6}$/i.test(p.bgColor||''))pair=customBg(p.bgColor,p.bgStrength);return pair?(darkNow()?pair[1]:pair[0]):null}
+try{window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>applyLook())}catch(e){}
 function applyLook(){const r=document.documentElement,p=D.prefs;
+  if(!p.bg||p.bg==='default')r.style.removeProperty('--paper');else{const c=paperColor();if(c)r.style.setProperty('--paper',c)}
   if(p.theme==='auto')r.removeAttribute('data-theme');else r.setAttribute('data-theme',p.theme);
   if(p.accent==='green')r.removeAttribute('data-acc');else r.setAttribute('data-acc',p.accent);
   document.querySelectorAll('.tabs button').forEach(b=>{const k=b.dataset.v;b.hidden=(k==='budget'||k==='stats')&&!p.tabs[k]});
@@ -841,7 +857,11 @@ function renderSettings(v){
   const ds=el('section','card pad','<h2>表示</h2>'+
     '<div class="two"><div class="field"><label for="pTheme">画面の明るさ</label><select id="pTheme">'+selOpts([['auto','端末に合わせる'],['light','ライト'],['dark','ダーク']],P.theme)+'</select></div>'+
     '<div class="field"><label for="pStart">開いたときの画面</label><select id="pStart">'+selOpts(tabsList,P.startTab)+'</select></div></div>'+
-    '<div class="field"><span class="flabel">テーマの色</span><div class="sw" id="pAcc">'+ACCENTS.map(([k,c,n])=>'<button type="button" data-k="'+k+'" aria-label="'+n+'" aria-pressed="'+(P.accent===k)+'" style="background:'+c+'"></button>').join('')+'</div></div>'+
+    '<div class="field"><span class="flabel">テーマの色（ボタンや強調の色）</span><div class="sw" id="pAcc">'+ACCENTS.map(([k,c,n])=>'<button type="button" data-k="'+k+'" aria-label="'+n+'" aria-pressed="'+(P.accent===k)+'" style="background:'+c+'"></button>').join('')+'</div></div>'+
+    '<div class="field"><span class="flabel">背景の色</span><div class="sw bg" id="pBg">'+Object.entries(BG).map(([k,v])=>'<button type="button" data-k="'+k+'" aria-label="'+v[2]+'" title="'+v[2]+'" aria-pressed="'+((P.bg||'default')===k)+'" style="background:'+(darkNow()?v[1]:v[0])+'"></button>').join('')+
+      '<button type="button" class="pick" aria-label="自由に選ぶ" title="自由に選ぶ" aria-pressed="'+(P.bg==='custom')+'"><input type="color" id="pBgColor" value="'+esc(P.bgColor||'#f4a6c0')+'" aria-label="背景の色を自由に選ぶ"></button></div>'+
+      '<div class="note">'+(P.bg==='custom'?'虹色の丸で選んだ色を使っています。':'虹色の丸を押すと、好きな色を選べます。')+'文字が読みやすいよう、選んだ色はやさしい色合いに整えて使います。ダークのときは自動で暗い色になります。</div></div>'+
+    (P.bg==='custom'?'<div class="field"><label for="pBgS">背景の色の濃さ</label><select id="pBgS">'+selOpts([[0,'うすめ'],[1,'ふつう'],[2,'こいめ']],P.bgStrength!=null?P.bgStrength:1)+'</select></div>':'')+
     '<div class="two"><div class="field"><label for="pWeek">週の始まり</label><select id="pWeek">'+selOpts([[0,'日曜日'],[1,'月曜日']],P.weekStart)+'</select></div>'+
     '<div class="field"><label for="pMonth">月の始まり日</label><select id="pMonth">'+selOpts(Array.from({length:28},(_,i)=>[i+1,i===0?'1日（ふつう）':(i+1)+'日']),P.monthStart)+'</select></div></div>'+
     '<div class="note">月の始まり日を給料日（例：25日）にすると、「11月」は10/25〜11/24として集計・予算を計算します。</div>'+
@@ -852,6 +872,9 @@ function renderSettings(v){
   $('pWeek').onchange=e=>setP('weekStart',Number(e.target.value));
   $('pMonth').onchange=e=>{P.monthStart=Number(e.target.value);state.ym=curYm();state.sel=todayStr;commit('月の始まり日を変えました')};
   ds.querySelectorAll('#pAcc button').forEach(b=>b.onclick=()=>setP('accent',b.dataset.k));
+  ds.querySelectorAll('#pBg button[data-k]').forEach(b=>b.onclick=()=>setP('bg',b.dataset.k));
+  const bc=$('pBgColor');if(bc){bc.addEventListener('input',()=>{P.bg='custom';P.bgColor=bc.value;applyLook()});bc.addEventListener('change',()=>{P.bg='custom';P.bgColor=bc.value;commit('背景の色を変えました')})}
+  if($('pBgS'))$('pBgS').onchange=e=>setP('bgStrength',Number(e.target.value));
   $('pTabB').onchange=e=>{P.tabs.budget=e.target.checked;commit()};$('pTabS').onchange=e=>{P.tabs.stats=e.target.checked;commit()};
 
   /* 記録の初期値 */
