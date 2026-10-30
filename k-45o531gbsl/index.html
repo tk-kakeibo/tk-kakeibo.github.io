@@ -255,6 +255,18 @@ body.calc-open .fab,body.calc-open .toast{display:none}
 .banner{max-width:620px;margin:0 auto 12px;display:flex;gap:10px;align-items:flex-start;background:var(--acc-soft);border-radius:12px;padding:10px 12px;font-size:.84rem;line-height:1.55}
 .banner .x{margin-left:auto;border:0;background:none;color:var(--muted);font-size:1.1rem;line-height:1;padding:2px 4px}
 .banner .b{flex:0 0 auto;border:0;background:var(--acc);color:#fff;border-radius:8px;padding:6px 10px;font-weight:700;font-size:.8rem}
+.banner.install{display:block;background:var(--acc-soft);border:2px solid var(--acc);padding:12px 14px}
+.banner.install .ih{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:1rem}
+.banner.install .ih .x{margin:0;font-size:.85rem;border:1px solid var(--rule);background:var(--sheet);border-radius:999px;padding:4px 12px;color:var(--muted)}
+.why{margin:.4em 0;padding-left:1.3em}.why li{margin:.1em 0}
+.iwarn{background:var(--sheet);border-radius:8px;padding:8px 10px;font-size:.82rem;margin:.4em 0}
+.isteps{margin:.4em 0 0;padding-left:1.4em}.isteps li{margin:.35em 0}
+.k2{display:inline-flex;align-items:center;gap:3px;background:var(--sheet);border:1px solid var(--rule);border-radius:6px;padding:0 6px;font-weight:700;white-space:nowrap}
+.k2 svg{width:16px;height:16px;color:#1a73e8}
+.addhero{text-align:center;padding:10px 4px 2px}.addhero img{width:76px;height:76px;border-radius:18px;box-shadow:0 6px 16px rgba(0,0,0,.18)}
+.addhero h1{margin:14px 0 8px}.addhero p{text-align:left}
+details.note summary{cursor:pointer;color:var(--acc);font-weight:700;padding:4px 0}
+.mustadd{border:2px solid var(--red);background:var(--red-soft)}.mustadd .mt{color:var(--red);font-size:1.02rem}.mustadd p{color:var(--ink)!important;margin:.3em 0}
 .about{display:flex;justify-content:space-between;gap:8px;font-size:.84rem}
 /* タブレット（縦） */
 @media (min-width:640px){
@@ -413,7 +425,7 @@ function bankClosed(d){const w=d.getDay(),m=d.getMonth()+1,day=d.getDate();retur
 
 /* ========== data ========== */
 const KEY='mainichi-kakeibo:v2';
-const APP_VERSION='1.4.0';
+const APP_VERSION='1.4.2';
 const SUPPORT_URL='';// 販売ページやお問い合わせ先のURLを入れると、設定に「お問い合わせ」ボタンが出ます
 const KINDS={bank:'銀行口座',cash:'財布（現金）',emoney:'電子マネー・アプリ',savings:'貯金用の口座'};
 const KIND_SHORT={bank:'口座',cash:'現金',emoney:'電子マネー',savings:'貯金'};
@@ -1114,6 +1126,33 @@ function drawRec(){
     if(r)D.recurring=D.recurring.map(y=>y.id===r.id?x:y);else D.recurring.push(x);closeSheet();commit('保存しました')};
 }
 
+/* ========== ホーム画面に追加 ========== */
+const IS_STANDALONE=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
+const IS_IOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.maxTouchPoints>1&&/Macintosh/.test(navigator.userAgent));
+let installEvt=null;
+const SHARE_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg>';
+function installSteps(){
+  if(IS_IOS)return '<ol class="isteps"><li>Safariの画面の下（iPadは右上）にある <span class="k2">'+SHARE_ICON+'共有</span> ボタンを押す</li><li>メニューを下にスクロールして <span class="k2">ホーム画面に追加</span> を押す</li><li>右上の <span class="k2">追加</span> を押す</li><li><b>Safariを閉じて、ホーム画面の「家計簿」アイコンから開く</b></li></ol>';
+  if(installEvt)return '<button class="btn" type="button" data-inst="1" style="margin-top:6px">ホーム画面に追加する</button>';
+  return '<ol class="isteps"><li>ブラウザの右上の <span class="k2">︙</span> を押す</li><li><span class="k2">ホーム画面に追加</span>（または <span class="k2">アプリをインストール</span>）を押す</li><li>ホーム画面のアイコンから開く</li></ol>';
+}
+function bindInstall(root){root.querySelectorAll('[data-inst]').forEach(b=>b.onclick=async()=>{if(!installEvt)return;try{installEvt.prompt();const r=await installEvt.userChoice;if(r&&r.outcome==='accepted'){installEvt=null;const bar=$('installBar');if(bar)bar.hidden=true;toast('ホーム画面に追加しました。アイコンから開いてください')}}catch(e){}})}
+function showInstall(){
+  const bar=$('installBar');if(!bar||IS_STANDALONE||!canStore)return;
+  if(!isTouch){ // パソコン：インストールできるときだけ、小さく案内
+    let off=false;try{off=localStorage.getItem(KEY+':installOff')==='1'}catch(e){}
+    if(off||!installEvt)return;
+    bar.className='banner';bar.innerHTML='<span>💻 アプリとしてインストールすると、デスクトップから開けます。</span><button class="b" type="button" data-inst="1">インストール</button><button class="x" type="button" aria-label="閉じる">×</button>';
+    bar.hidden=false;bindInstall(bar);bar.querySelector('.x').onclick=()=>{bar.hidden=true;try{localStorage.setItem(KEY+':installOff','1')}catch(e){}};return}
+  try{if(sessionStorage.getItem(KEY+':later'))return}catch(e){}
+  bar.className='banner install';
+  bar.innerHTML='<div class="ih"><b>📲 ホーム画面に追加してください</b><button class="x" type="button">あとで</button></div>'+
+    '<ul class="why"><li>記録が<b>消えにくく</b>なります</li><li>アプリのように<b>1タップで</b>開けます</li><li>電波がなくても使えます</li></ul>'+
+    (IS_IOS?'<div class="iwarn">iPhoneでは、Safariとホーム画面のアイコンで<b>記録が別々に保存</b>されます。いつも<b>アイコンから</b>使ってください。</div>':'')+installSteps();
+  bar.hidden=false;bindInstall(bar);
+  bar.querySelector('.x').onclick=()=>{bar.hidden=true;try{sessionStorage.setItem(KEY+':later','1')}catch(e){}};
+}
+
 /* ========== first-run setup ========== */
 let SU=null;
 function openSetup(){
@@ -1122,8 +1161,23 @@ function openSetup(){
 }
 const STEPS=4;
 function drawSetup(){
-  const o=$('setup'),s=SU.step;let h='<div class="inner"><div class="steps">'+Array.from({length:STEPS},(_,i)=>'<i class="'+(i<=s?'on':'')+'"></i>').join('')+'</div>';
+  const o=$('setup'),s=SU.step;
+  // iPhone・iPadのSafari：先にホーム画面に追加してもらう（Safariで設定するとアイコン側に引き継がれないため）
+  if(s===0&&IS_IOS&&!IS_STANDALONE&&canStore&&isTouch&&!SU.skipAdd){
+    o.innerHTML='<div class="inner"><div class="addhero"><img src="icons/icon-192.png" alt=""><h1>まずはホーム画面に追加</h1>'+
+      '<p>この家計簿は、ホーム画面のアイコンから使うアプリです。<b>Safariのまま設定すると、アイコンから開いたときに最初からやり直しになります。</b>先に追加して、アイコンから開いてください。</p></div>'+
+      '<section class="card pad"><b>やり方（1分）</b>'+installSteps()+'</section>'+
+      '<div class="tip">追加して<b>アイコンから開くと</b>、自動で最初の設定（はじめまして）が始まります。この画面は閉じてかまいません。</div>'+
+      '<details class="note"><summary>LINEやメールの中で開いている場合</summary><p>画面の右下や右上の「…」または「⋯」から<b>「Safariで開く」</b>（ブラウザで開く）を選び、Safariで開き直してから追加してください。</p></details>'+
+      '<p class="note" style="text-align:center;margin-top:8px"><button class="link" type="button" id="suSkipAdd" style="color:var(--muted);font-weight:500">ホーム画面に追加せずに、このまま使う</button></p></div>';
+    o.scrollTop=0;
+    $('suSkipAdd').onclick=()=>{const b=$('suSkipAdd');if(!b.dataset.c){b.dataset.c='1';b.textContent='本当にこのまま使う（記録はSafariの中にだけ残ります）';return}SU.skipAdd=true;drawSetup()};
+    return;
+  }
+  let h='<div class="inner"><div class="steps">'+Array.from({length:STEPS},(_,i)=>'<i class="'+(i<=s?'on':'')+'"></i>').join('')+'</div>';
   if(s===0){
+    if(!IS_STANDALONE&&canStore&&isTouch)h+='<section class="card pad mustadd"><b class="mt">'+(IS_IOS?'⚠ はじめる前に、ホーム画面に追加してください':'📲 はじめる前に、ホーム画面に追加するのがおすすめです')+'</b>'+
+      (IS_IOS?'<p>iPhoneでは、<b>Safariで入れた記録は、ホーム画面のアイコンから開いたときに引き継がれません。</b>このまま設定を始めず、先にホーム画面に追加して、アイコンから開き直してください。</p>':'<p>アプリのように1タップで開けて、記録も消えにくくなります。</p>')+installSteps()+'</section>';
     h+='<h1>はじめまして</h1><p>カード払いがいつ・どの口座から引き落とされるかまで自動で計算する家計簿です。かんたんな設定を4ステップで行います。</p>'+
       '<section class="card pad"><div class="field"><label for="suName">家計簿の名前</label><input type="text" id="suName" maxlength="20" value="'+esc(SU.name)+'"></div></section>'+
       '<div class="tip">このあと登録する口座やカードは、<b>いま全部入れても、1つだけ入れてあとから足しても大丈夫</b>です。費目、表示の色、週や月の始まりなど、ほとんどすべてをあとから設定で変えられます。</div>'+
@@ -1154,7 +1208,7 @@ function drawSetup(){
       '<div class="tip">💡 給料・家賃・サブスクなど毎月決まったお金は、使いはじめたあとに<b>設定 →「毎月の入出金」</b>に登録すると、毎月自動で入ります。</div>';
   }
   h+='<div class="err" id="suErr"></div><div class="actions">'+(s>0?'<button type="button" class="btn ghost" id="suBack">戻る</button>':'')+'<button type="button" class="btn" id="suNext">'+(s===STEPS-1?'はじめる':'次へ')+'</button></div></div>';
-  o.innerHTML=h;bindMoney(o);o.scrollTop=0;
+  o.innerHTML=h;bindMoney(o);bindInstall(o);o.scrollTop=0;
   const read=()=>{
     if(s===0){SU.name=$('suName').value.trim()||'わが家の家計簿';SU.agree=$('suAgree').checked}
     if(s===1)o.querySelectorAll('#suAccs .srow').forEach((r,i)=>{const a=SU.accounts[i];a.kind=r.querySelector('.ak').value;a.name=r.querySelector('.an').value.trim();a.bal=money(r.querySelector('.ab').value)});
@@ -1219,19 +1273,9 @@ function askAgree(){
 }
 // ブラウザにデータを消されにくくする（対応している端末のみ）
 try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
-// ホーム画面に追加の案内
-(function(){
-  const standalone=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
-  if(standalone||!canStore)return;
-  let off=false;try{off=localStorage.getItem(KEY+':installOff')==='1'}catch(e){}
-  if(off)return;
-  const bar=$('installBar'),close=()=>{bar.hidden=true;try{localStorage.setItem(KEY+':installOff','1')}catch(e){}};
-  const ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.maxTouchPoints>1&&/Macintosh/.test(navigator.userAgent));
-  if(ios){bar.innerHTML='<span>📲 <b>ホーム画面に追加</b>すると、アプリのように使えて記録も消えにくくなります。Safariの下にある共有ボタン（□に↑）→「ホーム画面に追加」を押してください。</span><button class="x" type="button" aria-label="閉じる">×</button>';bar.hidden=false;bar.querySelector('.x').onclick=close;return}
-  window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();const ev=e;
-    bar.innerHTML='<span>📲 <b>ホーム画面に追加</b>すると、アプリのように使えます。</span><button class="b" type="button">追加する</button><button class="x" type="button" aria-label="閉じる">×</button>';bar.hidden=false;
-    bar.querySelector('.b').onclick=async()=>{bar.hidden=true;try{ev.prompt();await ev.userChoice}catch(_){}};bar.querySelector('.x').onclick=close});
-})();
+// ホーム画面に追加の案内（ホーム画面のアイコンから開くまで、毎回出す）
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;showInstall();const st=$('setup');if(st&&SU&&SU.step===0)drawSetup()});
+showInstall();
 // オフラインで使えるようにする・新しいバージョンのお知らせ
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost')){
   navigator.serviceWorker.register('sw.js').then(reg=>{
