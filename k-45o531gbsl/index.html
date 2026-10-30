@@ -425,7 +425,7 @@ function bankClosed(d){const w=d.getDay(),m=d.getMonth()+1,day=d.getDate();retur
 
 /* ========== data ========== */
 const KEY='mainichi-kakeibo:v2';
-const APP_VERSION='1.4.2';
+const APP_VERSION='1.4.3';
 const SUPPORT_URL='';// 販売ページやお問い合わせ先のURLを入れると、設定に「お問い合わせ」ボタンが出ます
 const KINDS={bank:'銀行口座',cash:'財布（現金）',emoney:'電子マネー・アプリ',savings:'貯金用の口座'};
 const KIND_SHORT={bank:'口座',cash:'現金',emoney:'電子マネー',savings:'貯金'};
@@ -1129,7 +1129,30 @@ function drawRec(){
 /* ========== ホーム画面に追加 ========== */
 const IS_STANDALONE=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
 const IS_IOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.maxTouchPoints>1&&/Macintosh/.test(navigator.userAgent));
+// LINE・Instagram などのアプリの中のブラウザ（記録がSafari・Chromeとは別に保存される）
+const UA=navigator.userAgent||'';
+const IN_APP=!IS_STANDALONE&&(/\bLine\/|FBAN|FBAV|FB_IAB|Instagram|Twitter|musical_ly|BytedanceWebview|TikTok|YJApp|KAKAOTALK|; wv\)/i.test(UA)||(IS_IOS&&!/Safari\//.test(UA)));
+const IN_LINE=/\bLine\//i.test(UA);
+const IS_ANDROID=/Android/i.test(UA);
 let installEvt=null;
+function openOutside(){const u=new URL(location.href);u.hash='';u.searchParams.set('openExternalBrowser','1');location.href=u.toString()}
+function inAppScreen(){
+  const br=IS_IOS?'Safari':'Chrome';
+  return '<div class="inner"><div class="addhero"><img src="icons/icon-192.png" alt=""><h1>'+br+'で開き直してください</h1>'+
+    '<p>今は'+(IN_LINE?'LINE':'アプリ')+'の中のブラウザで開いています。<b>ここで設定すると、'+br+'やホーム画面のアイコンから開いたときに最初からやり直しになります。</b></p></div>'+
+    (IN_LINE?'<button class="btn" type="button" data-iaopen="1" style="width:100%">'+br+'で開く</button>':'')+
+    '<section class="card pad"><b>'+(IN_LINE?'うまく開かないときは':'やり方')+'</b><ol class="isteps">'+
+    '<li>画面の右下か右上にある <span class="k2">⋯</span>・<span class="k2">︙</span> または共有ボタンを押す</li>'+
+    '<li><span class="k2">'+br+'で開く</span>（<span class="k2">ブラウザで開く</span>・<span class="k2">他のアプリで開く</span>）を選ぶ</li>'+
+    '<li>見つからないときは、下の <b>URLをコピー</b> を押して、'+br+'のアドレス欄に貼り付けて開く</li></ol>'+
+    '<div class="btnrow" style="flex-wrap:nowrap;margin-top:8px"><input type="text" readonly id="iaUrl" value="'+esc(location.origin+location.pathname)+'" aria-label="家計簿のURL"><button class="btn line" type="button" id="iaCopy">URLをコピー</button></div></section>'+
+    '<p class="note" style="text-align:center">'+br+'で開いたら、'+(IS_IOS?'「まずはホーム画面に追加」の案内に進んでください。':'そのまま最初の設定を始められます。')+'</p></div>';
+}
+function bindInApp(root){
+  root.querySelectorAll('[data-iaopen]').forEach(o=>o.onclick=openOutside);
+  const c=root.querySelector('#iaCopy');if(c)c.onclick=()=>{const t=location.origin+location.pathname;
+    (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('URLをコピーしました')).catch(()=>{const i=root.querySelector('#iaUrl');i.focus();i.select();try{document.execCommand('copy');toast('URLをコピーしました')}catch(e){toast('URLを長押ししてコピーしてください')}})};
+}
 const SHARE_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg>';
 function installSteps(){
   if(IS_IOS)return '<ol class="isteps"><li>Safariの画面の下（iPadは右上）にある <span class="k2">'+SHARE_ICON+'共有</span> ボタンを押す</li><li>メニューを下にスクロールして <span class="k2">ホーム画面に追加</span> を押す</li><li>右上の <span class="k2">追加</span> を押す</li><li><b>Safariを閉じて、ホーム画面の「家計簿」アイコンから開く</b></li></ol>';
@@ -1144,6 +1167,7 @@ function showInstall(){
     if(off||!installEvt)return;
     bar.className='banner';bar.innerHTML='<span>💻 アプリとしてインストールすると、デスクトップから開けます。</span><button class="b" type="button" data-inst="1">インストール</button><button class="x" type="button" aria-label="閉じる">×</button>';
     bar.hidden=false;bindInstall(bar);bar.querySelector('.x').onclick=()=>{bar.hidden=true;try{localStorage.setItem(KEY+':installOff','1')}catch(e){}};return}
+  if(IN_APP){if(!D.ready)return;bar.className='banner install';bar.innerHTML='<div class="ih"><b>⚠ アプリの中のブラウザで開いています</b></div><div class="iwarn">ここでの記録は、'+(IS_IOS?'Safari':'Chrome')+'やホーム画面のアイコンの家計簿とは<b>別</b>になります。いつも使っている家計簿を開いてください。</div>'+(IN_LINE?'<button class="btn" type="button" data-iaopen="1" style="margin-top:6px">'+(IS_IOS?'Safari':'Chrome')+'で開く</button>':'');bar.hidden=false;bindInApp(bar);return}
   try{if(sessionStorage.getItem(KEY+':later'))return}catch(e){}
   bar.className='banner install';
   bar.innerHTML='<div class="ih"><b>📲 ホーム画面に追加してください</b><button class="x" type="button">あとで</button></div>'+
@@ -1162,6 +1186,7 @@ function openSetup(){
 const STEPS=4;
 function drawSetup(){
   const o=$('setup'),s=SU.step;
+  if(s===0&&IN_APP&&canStore){o.innerHTML=inAppScreen();bindInApp(o);o.scrollTop=0;return}
   // iPhone・iPadのSafari：先にホーム画面に追加してもらう（Safariで設定するとアイコン側に引き継がれないため）
   if(s===0&&IS_IOS&&!IS_STANDALONE&&canStore&&isTouch&&!SU.skipAdd){
     o.innerHTML='<div class="inner"><div class="addhero"><img src="icons/icon-192.png" alt=""><h1>まずはホーム画面に追加</h1>'+
@@ -1263,6 +1288,8 @@ function addCat(name){
 
 window.__kk={wdDate,recDate,get D(){return D},calc,balAt};
 $('noStore').hidden=canStore;
+// LINEから外のブラウザに切り替えたときの印をURLから消す（ホーム画面に追加するURLをきれいにする）
+try{if(/openExternalBrowser/.test(location.search))history.replaceState(null,'',location.pathname+location.hash)}catch(e){}
 render();
 if(!D.ready)openSetup();
 else if(!D.agreed)askAgree();
